@@ -37,7 +37,7 @@ def parse_args():
         "-i", "--identity-file",
         help="SSH private key file to use for logging into instances")
     parser.add_option(
-        "-t", "--instance-type", default="m3.xlarge",
+        "-t", "--instance-type", default="c3.2xlarge",
         help="Type of instance to launch (default: m3.xlarge). " +
              "WARNING: must be 64-bit; small instances won't work")
     parser.add_option(
