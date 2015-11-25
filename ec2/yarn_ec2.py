@@ -6,6 +6,7 @@ import random
 import string
 import subprocess
 import sys
+from sys import stderr
 import time
 from boto import ec2
 from optparse import OptionParser
@@ -100,8 +101,8 @@ def get_resource_map(fname = 'data/instance.matrix.txt'):
     return vcpu, vram, price
 
 #
-# get user data of specific 
-# 
+# get user data of specific
+#
 def get_user_data(fname, master_dns, instance_type):
     vcpu, vram, price = get_resource_map()
     data = open(fname).readlines()
@@ -124,17 +125,12 @@ def get_user_data(fname, master_dns, instance_type):
 
 # get ami of the machine
 # use ubuntu machines
-def get_ami(instance, use_backup = True):
+def get_ami(instance):
     itype = ec2_util.get_instance_type(instance)
-    if instance.startswith('g2'):
-        return 'ami-c9093ff9'
     if itype == 'pvm':
         return 'ami-6989a659'
     else:
-        if use_backup:
-            return 'ami-4dc9e27d'
-        else:
-            return 'ami-5189a661'
+        return 'ami-5189a661'
 
 # Launch master of a cluster of the given name, by setting up its security groups,
 # and then starting new instances in them.
@@ -164,18 +160,18 @@ def launch_master(conn, opts):
         master_group.authorize('tcp', 60070, 60070, '0.0.0.0/0')
         master_group.authorize('tcp', 4040, 4045, '0.0.0.0/0')
         master_group.authorize('tcp', 5080, 5080, '0.0.0.0/0')
-        master_group.authorize('udp', 0, 65535, '0.0.0.0/0')        
+        master_group.authorize('udp', 0, 65535, '0.0.0.0/0')
     if slave_group.rules == []:  # Group was just now created
         slave_group.authorize(src_group=master_group)
         slave_group.authorize(src_group=slave_group)
         slave_group.authorize('tcp', 22, 22, '0.0.0.0/0')
-        slave_group.authorize('tcp', 8000, 8100, '0.0.0.0/0')       
+        slave_group.authorize('tcp', 8000, 8100, '0.0.0.0/0')
         slave_group.authorize('tcp', 9000, 9999, '0.0.0.0/0')
         slave_group.authorize('tcp', 50000, 50100, '0.0.0.0/0')
         slave_group.authorize('tcp', 60060, 60060, '0.0.0.0/0')
         slave_group.authorize('tcp', 60075, 60075, '0.0.0.0/0')
         slave_group.authorize('udp', 0, 65535, '0.0.0.0/0')
-    
+
     # Check if instances are already running in our groups
     existing_masters, existing_slaves = ec2_util.get_existing_cluster(conn, cluster_name,
                                                                       die_on_error=False)
@@ -193,7 +189,7 @@ def launch_master(conn, opts):
     except:
         print >> stderr, "Could not find AMI " + opts.ami
         sys.exit(1)
-    
+
     # Launch or resume masters
     if existing_masters:
         print "Starting master..."
@@ -217,7 +213,7 @@ def launch_master(conn, opts):
                                user_data=get_user_data('bootstrap.py', '', master_type))
         master_nodes = master_res.instances
         print "Launched master in %s, regid = %s" % (opts.zone, master_res.id)
-    
+
     print 'Waiting for master to getup...'
     ec2_util.wait_for_instances(conn, master_nodes)
 
@@ -225,11 +221,11 @@ def launch_master(conn, opts):
     for master in master_nodes:
         master.add_tag(
             key='Name',
-            value='{cn}-master-{iid}'.format(cn=cluster_name, iid=master.id))    
+            value='{cn}-master-{iid}'.format(cn=cluster_name, iid=master.id))
     master = master_nodes[0].public_dns_name
     print 'finishing getting master %s' % master
     # Return all the instances
-    return master_nodes 
+    return master_nodes
 
 # Launch slaves of a cluster of the given name, by setting up its security groups,
 # and then starting new instances in them.
@@ -395,7 +391,7 @@ def main():
         sys.exit(1)
 
     if opts.zone == '':
-        opts.zone = random.choice(conn.get_all_zones()).name    
+        opts.zone = random.choice(conn.get_all_zones()).name
 
     action = opts.action
     cluster_name = opts.cluster_name
@@ -417,7 +413,7 @@ def main():
     else:
         print >> sys.stderr, "Invalid action: %s" % action
         sys.exit(1)
-        
+
 if __name__ == "__main__":
     logging.basicConfig()
     main()
