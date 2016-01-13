@@ -19,7 +19,7 @@ class UsageError(Exception):
 def parse_args():
     parser = OptionParser(
         usage="mode-ec2 [options] <action> <cluster_name>"
-        + "\n\n<action> can be: launch, addslave, destroy, login, stop, start, get-master, stop-slave",
+        + "\n\n<action> can be: launch, addslave, destroy, login, stop, start, get-master, stop-slave, forward-port",
         add_help_option=False)
     parser.add_option(
         "-h", "--help", action="help",
@@ -288,16 +288,19 @@ def launch_slaves(conn, opts):
 # Returns a tuple of EC2 reservation objects for the master and slaves
 # Fails if there already instances running in the cluster's groups.
 def launch_spot_slaves(conn, opts):
+    vcpu, vram, price = get_resource_map()
     cluster_name = opts.cluster_name
     if opts.identity_file is None:
         print >> sys.stderr, "ERROR: Must provide an identity file (-i) for ssh connections."
         sys.exit(1)
     if opts.spot_price is None:
-        print >> sys.stderr, "ERROR: Must provide a spot price for bidding."
-        sys.exit(1)
+        opts.spot_price = price[opts.instance_type]
+        print "Spot price is not specified, bid the full price=%g for %s" % (opts.spot_price, opts.instance_type)
+
     if opts.key_pair is None:
         print >> sys.stderr, "ERROR: Must provide a key pair name (-k) to use on instances."
         sys.exit(1)
+
     master_group = ec2_util.get_or_make_group(conn, cluster_name + "-master", False)
     slave_group = ec2_util.get_or_make_group(conn, cluster_name + "-slave", False)
     # Check if instances are already running in our groups
@@ -310,7 +313,7 @@ def launch_spot_slaves(conn, opts):
 
     if opts.ami is None:
         opts.ami = get_ami(opts.instance_type)
-    print "Launching Spot instances..."
+    print "Launching Spot instances type=%s, price=%g..." % (opts.instance_type, opts.spot_price)
 
     master = existing_masters[0]
     block_map = ec2_util.get_block_device(opts.instance_type, 0)
@@ -409,7 +412,12 @@ def main():
         (master_nodes, slave_nodes) = ec2_util.get_existing_cluster(conn, cluster_name)
         master = master_nodes[0].public_dns_name
         subprocess.check_call(
-            ssh_command(opts)  + ['-t', '-t', "%s@%s" % (opts.user, master)])
+            ssh_command(opts)  + ['-t', "%s@%s" % (opts.user, master)])
+    elif action == "forward-port":
+        (master_nodes, slave_nodes) = ec2_util.get_existing_cluster(conn, cluster_name)
+        master = master_nodes[0].public_dns_name
+        subprocess.check_call(
+            ssh_command(opts)  + ['-D', '9595'] + ['-t', "%s@%s" % (opts.user, master)])
     else:
         print >> sys.stderr, "Invalid action: %s" % action
         sys.exit(1)
