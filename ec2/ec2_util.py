@@ -168,13 +168,13 @@ def get_block_device(instance_type, ebs_vol_size):
         device.delete_on_termination = True
         block_map["/dev/sdv"] = device
 
-    if instance_type.startswith('m3.'):
-        for i in range(get_num_disks(instance_type)):
-            dev = BlockDeviceType()
-            dev.ephemeral_name = 'ephemeral%d' % i
-            # The first ephemeral drive is /dev/sdb.
-            name = '/dev/sd' + string.letters[i + 1]
-            block_map[name] = dev
+    for i in range(get_num_disks(instance_type)):
+        dev = BlockDeviceType()
+        dev.ephemeral_name = 'ephemeral%d' % i
+        # The first ephemeral drive is /dev/sdb.
+        name = '/dev/sd' + string.letters[i + 1]
+        block_map[name] = dev
+
     return block_map
 
 
@@ -203,4 +203,3 @@ def get_existing_cluster(conn, cluster_name, die_on_error=True):
         else:
             print >> sys.stderr, "ERROR: Could not find any existing cluster"
         sys.exit(1)
-
