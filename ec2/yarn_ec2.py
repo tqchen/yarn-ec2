@@ -101,7 +101,7 @@ def get_resource_map(fname = 'data/instance.matrix.txt'):
     return vcpu, vram, price
 
 #
-# get user data of specific
+# get user data of specific instance
 #
 def get_user_data(fname, master_dns, instance_type):
     vcpu, vram, price = get_resource_map()

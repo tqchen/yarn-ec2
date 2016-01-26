@@ -16,22 +16,26 @@ import socket
 import time
 import pwd
 
-global MASTER
-global JAVA_HOME
-global HADOOP_HOME
-
 ###---------------------------------------------------##
 #  Configuration Section, will be modified by script  #
 ###---------------------------------------------------##
-apt_packages = ['emacs',
-                'git',
-                'g++',
-                'make',
-                'python-numpy',
-                'libprotobuf-dev',
-                'libcurl4-openssl-dev']
+node_apt_packages = [
+    'emacs',
+    'git',
+    'g++',
+    'make',
+    'python-numpy',
+    'libprotobuf-dev',
+    'libcurl4-openssl-dev']
+
+# master only packages
+master_apt_packages = [
+    'protobuf-compiler']
+
 hadoop_url = 'http://www.motorlogy.com/apache/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz'
 hadoop_dir = 'hadoop-2.6.0'
+
+
 
 # commands to execute at startup time.
 exec_cmds = []
@@ -39,7 +43,6 @@ exec_cmds = []
 ###---------------------------------------------------##
 #  Automatically set by script                        #
 ###---------------------------------------------------##
-
 USER_NAME = 'ubuntu'
 # setup variables
 MASTER = os.getenv('MY_MASTER_DNS', '')
@@ -79,8 +82,7 @@ def sudo(cmd):
     run('sudo %s' % cmd)
 
 ### Installation helpers ###
-def install_packages(pkgs=None):
-    pkgs = apt_packages if is None else pkgs
+def install_packages(pkgs):
     sudo('apt-get -y update')
     sudo('apt-get -y install %s' % (' '.join(pkgs)))
 
@@ -234,12 +236,13 @@ def install_hadoop(is_master):
         env += [('YARN_HOME', HADOOP_HOME)]
         env += [('YARN_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
         env += [('HADOOP_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
+        disks = ['/disk/%s' % d for d in DISK_LIST if os.path.exists('/dev/%s' % d)]
+        setup_hadoop_site(MASTER,
+                          '%s/hadoop' % disks[0],
+                          ['%s/hadoop/dfs' % d for d in disks],
+                          NODE_VCPU, NODE_VMEM)
         return env
-    disks = ['/disk/%s' % d for d in DISK_LIST if os.path.exists('/dev/%s' % d)]
-    setup_hadoop_site(MASTER,
-                      '%s/hadoop' % disks[0],
-                      ['%s/hadoop/dfs' % d for d in disks],
-                      NODE_VCPU, NODE_VMEM)
+
     return run_install()
 
 def regsshkey(fname):
@@ -252,7 +255,11 @@ def regsshkey(fname):
 
 # main script to install all dependencies
 def install_main(is_master):
-    install_packages()
+    if is_master:
+        install_packages(master_apt_packages + node_apt_packages)
+    else:
+        install_packages(node_apt_packages)
+
     env = []
     env += install_java()
     env += install_hadoop(is_master)
@@ -288,6 +295,9 @@ def install_main(is_master):
     """
     run(key_setup)
     regsshkey('%s/etc/hadoop/slaves' % HADOOP_HOME)
+    for cmd in exec_cmds:
+        run(cmd)
+    # end of instalation.
 
 # Make startup script for bulding
 def make_startup_script(is_master):
@@ -325,6 +335,7 @@ def make_startup_script(is_master):
                 ' $HADOOP_HOME/sbin/yarn-daemon.sh --config $HADOOP_HOME/etc/hadoop start nodemanager')
     with open('startup.sh', 'w') as fo:
         fo.write('#!/bin/bash\n')
+        fo.write('set -v\n')
         fo.write('\n'.join(cmds))
     run('chmod +x startup.sh')
     run('./startup.sh')
