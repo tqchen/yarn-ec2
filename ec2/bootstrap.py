@@ -32,13 +32,27 @@ node_apt_packages = [
 master_apt_packages = [
     'protobuf-compiler']
 
+# List of r packages to be installed in master
+master_r_packages = [
+    'r-base-dev',
+    'r-base',
+    'r-cran-statmod',
+    'r-cran-RCurl',
+    'r-cran-rjson'
+]
+
+# download link of hadoop.
 hadoop_url = 'http://www.motorlogy.com/apache/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz'
 hadoop_dir = 'hadoop-2.6.0'
 
 
+# customized installation script.
+# See optional installation scripts for options.
+def custom_master_install():
+    install_spark()
+    install_r()
+    pass
 
-# commands to execute at startup time.
-exec_cmds = []
 
 ###---------------------------------------------------##
 #  Automatically set by script                        #
@@ -56,6 +70,30 @@ JAVA_HOME = os.getenv('JAVA_HOME')
 HADOOP_HOME = os.getenv('HADOOP_HOME')
 DISK_LIST = [('xvd' + chr(ord('b') + i)) for i in range(10)]
 ENVIRON = os.environ.copy()
+
+
+###--------------------------------##
+#  Optional installation scripts.  #
+###--------------------------------##
+def install_r():
+    if master_r_packages:
+        sudo("apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E084DAB9")
+        sudo("echo deb https://cran.r-project.org/bin/linux/ubuntu trusty/ >>/etc/apt/sources.list")
+        sudo('apt-get -y update')
+        sudo('apt-get -y install %s' % (' '.join(master_r_packages)))
+
+
+def install_spark():
+    run('wget http://apache.osuosl.org/spark/spark-1.6.0/spark-1.6.0-bin-hadoop2.4.tgz')
+    run('tar xf spark-1.6.0-bin-hadoop2.4.tgz')
+    run('rm -rf spark-1.6.0-bin-hadoop2.4.tgz')
+    with open('.bashrc', 'a') as fo:
+        fo.write('\nexport PATH=${PATH}:spark-1.6.0-bin-hadoop2.4\n')
+
+
+def install_xgboost():
+    run('git clone --recursive https://github.com/dmlc/xgboost')
+    run('cd xgboost; cp make/config.mk .; echo USE_S3=1 >> config.mk; make -j4')
 
 ### Script section ###
 def run(cmd):
@@ -86,6 +124,7 @@ def install_packages(pkgs):
     sudo('apt-get -y update')
     sudo('apt-get -y install %s' % (' '.join(pkgs)))
 
+
 def install_java():
     """
     install java and setup environment variables
@@ -101,6 +140,7 @@ def install_java():
     if JAVA_HOME is None:
         JAVA_HOME = os.path.abspath('jdk1.8.0_40')
     return [('JAVA_HOME', JAVA_HOME)]
+
 
 def install_hadoop(is_master):
     def update_site(fname, rmap):
@@ -266,6 +306,7 @@ def install_main(is_master):
     path = ['$HADOOP_HOME/bin', '$HADOOP_HOME/sbin', '$JAVA_HOME/bin']
     env += [('LD_LIBRARY_PATH', '$HADOOP_HOME/native/lib')]
     env += [('LD_LIBRARY_PATH', '${LD_LIBRARY_PATH}:$HADOOP_HDFS_HOME/lib/native:$JAVA_HOME/jre/lib/amd64/server')]
+    env += [('LD_LIBRARY_PATH', '${LD_LIBRARY_PATH}:/usr/local/lib')]
     env += [('LIBHDFS_OPTS', '--Xmx128m')]
     env += [('MY_MASTER_DNS', MASTER)]
     env += [('MY_NODE_TYPE', NODE_TYPE)]
@@ -340,6 +381,7 @@ def make_startup_script(is_master):
     run('chmod +x startup.sh')
     run('./startup.sh')
 
+
 def main():
     global MASTER
     logging.basicConfig(filename = 'bootstrap.log', level = logging.INFO,
@@ -358,6 +400,8 @@ def main():
     ENVIRON['HADOOP_HOME'] = HADOOP_HOME
     ENVIRON['JAVA_HOME'] = JAVA_HOME
     tend = time.time()
+    if is_master:
+        custom_master_install()
     logging.info('boostrap finishes in %g secs' % (tend - tmid))
     logging.info('all finishes in %g secs' % (tend - tstart))
 
