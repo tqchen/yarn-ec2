@@ -4,7 +4,7 @@
 script to install all the necessary things
 for working on a linux machine with nothing
 
-Installing minimum dependencies 
+Installing minimum dependencies
 """
 import sys
 import os
@@ -20,6 +20,26 @@ global MASTER
 global JAVA_HOME
 global HADOOP_HOME
 
+###---------------------------------------------------##
+#  Configuration Section, will be modified by script  #
+###---------------------------------------------------##
+apt_packages = ['emacs',
+                'git',
+                'g++',
+                'make',
+                'python-numpy',
+                'libprotobuf-dev',
+                'libcurl4-openssl-dev']
+hadoop_url = 'http://www.motorlogy.com/apache/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz'
+hadoop_dir = 'hadoop-2.6.0'
+
+# commands to execute at startup time.
+exec_cmds = []
+
+###---------------------------------------------------##
+#  Automatically set by script                        #
+###---------------------------------------------------##
+
 USER_NAME = 'ubuntu'
 # setup variables
 MASTER = os.getenv('MY_MASTER_DNS', '')
@@ -31,17 +51,17 @@ AWS_ID = os.getenv('AWS_ACCESS_KEY_ID', 'undefined')
 AWS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', 'undefined')
 JAVA_HOME = os.getenv('JAVA_HOME')
 HADOOP_HOME = os.getenv('HADOOP_HOME')
-DISK_LIST = ['xvdb', 'xvdc', 'xvdd', 'xvde']
-EXEC_CMD = ''
+DISK_LIST = [('xvd' + chr(ord('b') + i)) for i in range(10)]
 ENVIRON = os.environ.copy()
 
+### Script section ###
 def run(cmd):
     try:
         print cmd
-        logging.info(cmd)    
+        logging.info(cmd)
         proc = subprocess.Popen(cmd, shell=True, env = ENVIRON,
                                 stdout=subprocess.PIPE, stderr = subprocess.PIPE)
-        out, err = proc.communicate()        
+        out, err = proc.communicate()
         retcode = proc.poll()
         if retcode != 0:
             logging.error('Command %s returns %d' % (cmd,retcode))
@@ -58,147 +78,9 @@ def run(cmd):
 def sudo(cmd):
     run('sudo %s' % cmd)
 
-
-def update_site(fname, rmap):
-    """
-    update the site script
-    """
-    try:
-        tree = ElementTree.parse(fname)
-        root = tree.getroot()
-    except Exception:
-        cfg = ElementTree.Element("configuration")
-        tree = ElementTree.ElementTree(cfg)
-        root = tree.getroot()        
-    rset = set()
-    for prop in root.getiterator('property'):
-        prop = dict((p.tag, p) for p in prop)
-        name = prop['name'].text.strip()
-        if name in rmap:
-            prop['value'].text = str(rmap[name])
-            rset.add(name)
-    for name, text in rmap.iteritems():
-        if name in rset:
-            continue
-        prop = ElementTree.SubElement(root, 'property')
-        ElementTree.SubElement(prop, 'name').text = name 
-        ElementTree.SubElement(prop, 'value').text = str(text)
-    rough_string = ElementTree.tostring(root, 'utf-8')
-    reparsed = minidom.parseString(rough_string)
-    pretty = reparsed.toprettyxml(indent='\t')    
-    fo = open(fname, 'w')
-    fo.write(pretty)
-    fo.close()
-
-def setup_hadoop_site(master, tmp_dir, hdfs_dir, vcpu, vmem, is_master):
-    """
-    setup hadoop side given the parameters
-    Parameters:
-        master: the dns to master uri
-        tmp_dir: the directory to store temp files
-        hdfs_dir: the directories for hdfs
-        vcpu: the number of cpus current machine have
-        vmem: the memory(MB) current machine have
-    """
-    if vmem < 4 * 1024:
-        reserved_ram = 256
-    elif vmem < 8 * 1024:        
-        reserved_ram = 1 * 1024
-    elif vmem < 24 * 1024 :
-        reserved_ram = 2 * 1024    
-    elif vmem < 48 * 1024:
-        reserved_ram = 4 * 1024
-    elif vmem < 64 * 1024:
-        reserved_ram = 6 * 1024
-    else:
-        reserved_ram = 8 * 1024
-
-    ram_per_container = (vmem - reserved_ram) / vcpu
-
-    if is_master:
-        vcpu = vcpu - 2
-
-    core_site = {
-        'fs.defaultFS': 'hdfs://%s:9000/' % master,
-        'fs.s3n.awsAccessKeyId': AWS_ID,
-        'fs.s3n.awsSecretAccessKey': AWS_KEY,
-        'hadoop.tmp.dir':  tmp_dir
-    }
-    update_site('%s/etc/hadoop/core-site.xml' % HADOOP_HOME, core_site)
-    hdfs_site = {
-        'dfs.data.dir': ','.join(['%s/data' % d for d in hdfs_dir]),
-        'dfs.permissions': 'false',
-        'dfs.replication': '1'
-    }
-    update_site('%s/etc/hadoop/hdfs-site.xml' % HADOOP_HOME, hdfs_site)    
-    yarn_site = {
-        'yarn.resourcemanager.resource-tracker.address': '%s:8025' % master,
-        'yarn.resourcemanager.scheduler.address': '%s:8030' % master, 
-        'yarn.resourcemanager.address': '%s:8032' % master,
-        'yarn.scheduler.minimum-allocation-mb': 512,
-        'yarn.scheduler.maximum-allocation-mb': 64000,
-        'yarn.scheduler.minimum-allocation-vcores': 1,
-        'yarn.scheduler.maximum-allocation-vcores': 32,
-        'yarn.nodemanager.resource.memory-mb': vcpu * ram_per_container,
-        'yarn.nodemanager.resource.cpu-vcores': vcpu,
-        'yarn.log-aggregation-enable': 'true',
-        'yarn.nodemanager.vmem-check-enabled': 'false',
-        'yarn.nodemanager.aux-services': 'mapreduce_shuffle',
-        'yarn.nodemanager.aux-services.mapreduce.shuffle.class': 'org.apache.hadoop.mapred.ShuffleHandler',
-        'yarn.nodemanager.remote-app-log-dir': os.path.join(tmp_dir, 'logs'),
-        'yarn.nodemanager.log-dirs': os.path.join(tmp_dir, 'userlogs')  
-    }
-    update_site('%s/etc/hadoop/yarn-site.xml' % HADOOP_HOME, yarn_site)
-    mapred_site = {
-        'yarn.app.mapreduce.am.resource.mb': 2 * ram_per_container,
-        'yarn.app.mapreduce.am.command-opts': '-Xmx%dm' % int(0.8 * 2 * ram_per_container),
-        'mapreduce.framework.name': 'yarn',
-        'mapreduce.map.cpu.vcores': 1,
-        'mapreduce.map.memory.mb': ram_per_container,
-        'mapreduce.map.java.opts': '-Xmx%dm' % int(0.8 * ram_per_container),
-        'mapreduce.reduce.cpu.vcores': 1,
-        'mapreduce.reduce.memory.mb': 2 * ram_per_container,
-        'mapreduce.reduce.java.opts': '-Xmx%dm' % int(0.8 * ram_per_container)
-    }
-    update_site('%s/etc/hadoop/mapred-site.xml' % HADOOP_HOME, mapred_site)
-    capacity_site = {
-        'yarn.scheduler.capacity.resource-calculator': 'org.apache.hadoop.yarn.util.resource.DominantResourceCalculator'
-    }
-    update_site('%s/etc/hadoop/capacity-scheduler.xml' % HADOOP_HOME, capacity_site)
-    fo = open('%s/etc/hadoop/hadoop-env.sh' % HADOOP_HOME, 'w')
-    fo.write('export HADOOP_CLASSPATH=$HADOOP_CLASSPATH:$HADOOP_PREFIX/share/hadoop/tools/lib/*\n')
-    fo.write('export HADOOP_LOG_DIR=%s/log\n' % tmp_dir)
-    fo.write('export YARN_LOG_DIR=%s/log\n' % tmp_dir)
-    fo.write('export JAVA_HOME=\"%s\"\n' % JAVA_HOME)
-    fo.close()
-    fo = open('%s/etc/hadoop/slaves' % HADOOP_HOME, 'w')
-    fo.write(master + '\n')
-    fo.close()    
-
-def setup_dir():
-    disks = []
-    sudo('mkdir /disk')
-    for d in DISK_LIST:
-        if os.path.exists('/dev/%s' % d):
-            sudo('unmount /dev/%s' % d)
-            sudo('mkfs -t ext4 /dev/%s' % d)
-            sudo('mkdir /disk/%s' % d)
-            sudo('mount /dev/%s /disk/%s' % (d, d))
-            disks.append('/disk/%s' % d)            
-    for d in disks:
-        sudo('mkdir %s/hadoop' %d)
-        sudo('chown ubuntu:ubuntu %s/hadoop' % d)
-        run('rm -rf %s/hadoop/dfs' % d)
-        run('mkdir %s/hadoop/dfs' % d)
-        run('mkdir %s/hadoop/dfs/name' % d)
-        run('mkdir %s/hadoop/dfs/data' % d)
-    print disks
-    return disks
-
-def install_packages(pkgs):
-    """
-    install necessary packages for update    
-    """    
+### Installation helpers ###
+def install_packages(pkgs=None):
+    pkgs = apt_packages if is None else pkgs
     sudo('apt-get -y update')
     sudo('apt-get -y install %s' % (' '.join(pkgs)))
 
@@ -218,6 +100,148 @@ def install_java():
         JAVA_HOME = os.path.abspath('jdk1.8.0_40')
     return [('JAVA_HOME', JAVA_HOME)]
 
+def install_hadoop(is_master):
+    def update_site(fname, rmap):
+        """
+        update the site script
+        """
+        try:
+            tree = ElementTree.parse(fname)
+            root = tree.getroot()
+        except Exception:
+            cfg = ElementTree.Element("configuration")
+            tree = ElementTree.ElementTree(cfg)
+            root = tree.getroot()
+        rset = set()
+        for prop in root.getiterator('property'):
+            prop = dict((p.tag, p) for p in prop)
+            name = prop['name'].text.strip()
+            if name in rmap:
+                prop['value'].text = str(rmap[name])
+                rset.add(name)
+        for name, text in rmap.iteritems():
+            if name in rset:
+                continue
+            prop = ElementTree.SubElement(root, 'property')
+            ElementTree.SubElement(prop, 'name').text = name
+            ElementTree.SubElement(prop, 'value').text = str(text)
+        rough_string = ElementTree.tostring(root, 'utf-8')
+        reparsed = minidom.parseString(rough_string)
+        pretty = reparsed.toprettyxml(indent='\t')
+        fo = open(fname, 'w')
+        fo.write(pretty)
+        fo.close()
+
+    def setup_hadoop_site(master, tmp_dir, hdfs_dir, vcpu, vmem):
+        """
+        setup hadoop side given the parameters
+
+        Parameters
+        ----------
+        master: the dns to master uri
+        tmp_dir: the directory to store temp files
+        hdfs_dir: the directories for hdfs
+        vcpu: the number of cpus current machine have
+        vmem: the memory(MB) current machine have
+        """
+        if vmem < 4 * 1024:
+            reserved_ram = 256
+        elif vmem < 8 * 1024:
+            reserved_ram = 1 * 1024
+        elif vmem < 24 * 1024 :
+            reserved_ram = 2 * 1024
+        elif vmem < 48 * 1024:
+            reserved_ram = 4 * 1024
+        elif vmem < 64 * 1024:
+            reserved_ram = 6 * 1024
+        else:
+            reserved_ram = 8 * 1024
+        ram_per_container = (vmem - reserved_ram) / vcpu
+
+        if is_master:
+            vcpu = vcpu - 2
+
+        core_site = {
+            'fs.defaultFS': 'hdfs://%s:9000/' % master,
+            'fs.s3n.awsAccessKeyId': AWS_ID,
+            'fs.s3n.awsSecretAccessKey': AWS_KEY,
+            'hadoop.tmp.dir':  tmp_dir
+        }
+        update_site('%s/etc/hadoop/core-site.xml' % HADOOP_HOME, core_site)
+        hdfs_site = {
+            'dfs.data.dir': ','.join(['%s/data' % d for d in hdfs_dir]),
+            'dfs.permissions': 'false',
+            'dfs.replication': '1'
+        }
+        update_site('%s/etc/hadoop/hdfs-site.xml' % HADOOP_HOME, hdfs_site)
+        yarn_site = {
+            'yarn.resourcemanager.resource-tracker.address': '%s:8025' % master,
+            'yarn.resourcemanager.scheduler.address': '%s:8030' % master,
+            'yarn.resourcemanager.address': '%s:8032' % master,
+            'yarn.scheduler.minimum-allocation-mb': 512,
+            'yarn.scheduler.maximum-allocation-mb': 64000,
+            'yarn.scheduler.minimum-allocation-vcores': 1,
+            'yarn.scheduler.maximum-allocation-vcores': 32,
+            'yarn.nodemanager.resource.memory-mb': vcpu * ram_per_container,
+            'yarn.nodemanager.resource.cpu-vcores': vcpu,
+            'yarn.log-aggregation-enable': 'true',
+            'yarn.nodemanager.vmem-check-enabled': 'false',
+            'yarn.nodemanager.aux-services': 'mapreduce_shuffle',
+            'yarn.nodemanager.aux-services.mapreduce.shuffle.class': 'org.apache.hadoop.mapred.ShuffleHandler',
+            'yarn.nodemanager.remote-app-log-dir': os.path.join(tmp_dir, 'logs'),
+        'yarn.nodemanager.log-dirs': os.path.join(tmp_dir, 'userlogs')
+        }
+        update_site('%s/etc/hadoop/yarn-site.xml' % HADOOP_HOME, yarn_site)
+        mapred_site = {
+            'yarn.app.mapreduce.am.resource.mb': 2 * ram_per_container,
+            'yarn.app.mapreduce.am.command-opts': '-Xmx%dm' % int(0.8 * 2 * ram_per_container),
+            'mapreduce.framework.name': 'yarn',
+            'mapreduce.map.cpu.vcores': 1,
+            'mapreduce.map.memory.mb': ram_per_container,
+            'mapreduce.map.java.opts': '-Xmx%dm' % int(0.8 * ram_per_container),
+            'mapreduce.reduce.cpu.vcores': 1,
+            'mapreduce.reduce.memory.mb': 2 * ram_per_container,
+            'mapreduce.reduce.java.opts': '-Xmx%dm' % int(0.8 * ram_per_container)
+        }
+        update_site('%s/etc/hadoop/mapred-site.xml' % HADOOP_HOME, mapred_site)
+        capacity_site = {
+            'yarn.scheduler.capacity.resource-calculator': 'org.apache.hadoop.yarn.util.resource.DominantResourceCalculator'
+        }
+        update_site('%s/etc/hadoop/capacity-scheduler.xml' % HADOOP_HOME, capacity_site)
+        fo = open('%s/etc/hadoop/hadoop-env.sh' % HADOOP_HOME, 'w')
+        fo.write('export HADOOP_CLASSPATH=$HADOOP_CLASSPATH:$HADOOP_PREFIX/share/hadoop/tools/lib/*\n')
+        fo.write('export HADOOP_LOG_DIR=%s/log\n' % tmp_dir)
+        fo.write('export YARN_LOG_DIR=%s/log\n' % tmp_dir)
+        fo.write('export JAVA_HOME=\"%s\"\n' % JAVA_HOME)
+        fo.close()
+        fo = open('%s/etc/hadoop/slaves' % HADOOP_HOME, 'w')
+        fo.write(master + '\n')
+        fo.close()
+
+    def run_install():
+        if not os.path.exists('hadoop-2.6.0'):
+            run('wget %s' % hadoop_url)
+            run('tar xf hadoop-2.6.0.tar.gz')
+            run('rm -f hadoop-2.6.0.tar.gz')
+            global HADOOP_HOME
+        if HADOOP_HOME is None:
+            HADOOP_HOME = os.path.abspath('hadoop-2.6.0')
+        env = [('HADOOP_HOME', HADOOP_HOME)]
+        env += [('HADOOP_PREFIX', HADOOP_HOME)]
+        env += [('HADOOP_MAPRED_HOME', HADOOP_HOME)]
+        env += [('HADOOP_COMMON_HOME', HADOOP_HOME)]
+        env += [('HADOOP_HDFS_HOME', HADOOP_HOME)]
+        env += [('YARN_HOME', HADOOP_HOME)]
+        env += [('YARN_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
+        env += [('HADOOP_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
+        return env
+    disks = ['/disk/%s' % d for d in DISK_LIST if os.path.exists('/dev/%s' % d)]
+    setup_hadoop_site(MASTER,
+                      '%s/hadoop' % disks[0],
+                      ['%s/hadoop/dfs' % d for d in disks],
+                      NODE_VCPU, NODE_VMEM)
+    return run_install()
+
 def regsshkey(fname):
     for dns in (open(fname).readlines() + ['localhost', '0.0.0.0']):
         try:
@@ -225,55 +249,13 @@ def regsshkey(fname):
         except:
             pass
         run('ssh-keyscan %s >> ~/.ssh/known_hosts' % dns.strip())
-    
-def install_hadoop():
-    """
-    installation script for hadoop distribution
-    """
-    if not os.path.exists('hadoop-2.6.0'):
-        run('wget http://www.motorlogy.com/apache/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz')
-        run('tar xf hadoop-2.6.0.tar.gz')
-        run('rm -f hadoop-2.6.0.tar.gz')
-    global HADOOP_HOME
-    if HADOOP_HOME is None:
-        HADOOP_HOME = os.path.abspath('hadoop-2.6.0')
-    env = [('HADOOP_HOME', HADOOP_HOME)]
-    env += [('HADOOP_PREFIX', HADOOP_HOME)]
-    env += [('HADOOP_MAPRED_HOME', HADOOP_HOME)]
-    env += [('HADOOP_COMMON_HOME', HADOOP_HOME)]
-    env += [('HADOOP_HDFS_HOME', HADOOP_HOME)]
-    env += [('YARN_HOME', HADOOP_HOME)]
-    env += [('YARN_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
-    env += [('HADOOP_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
-    
-    return env
-
-def setup_env(env, path):
-    fo = open('.hadoop_env', 'w')
-    for k, v in env:
-        fo.write('export %s=%s\n' % (k,v))        
-        ENVIRON[k] = v
-    fo.write('export PATH=$PATH:%s\n' % (':'.join(path)))
-    fo.close()
-    for l in open('.bashrc'):
-        if l.find('.hadoop_env') != -1:
-            return
-    run('echo source ~/.hadoop_env >> ~/.bashrc')
 
 # main script to install all dependencies
-def install_main():
-    # packages that are pre-installed,
-    # keep it minimum
-    pkgs = ['emacs',
-            'git',
-            'g++',
-            'make',
-            'libprotobuf-dev',
-            'libcurl4-openssl-dev']
-    install_packages(pkgs)
+def install_main(is_master):
+    install_packages()
     env = []
     env += install_java()
-    env += install_hadoop()
+    env += install_hadoop(is_master)
     path = ['$HADOOP_HOME/bin', '$HADOOP_HOME/sbin', '$JAVA_HOME/bin']
     env += [('LD_LIBRARY_PATH', '$HADOOP_HOME/native/lib')]
     env += [('LD_LIBRARY_PATH', '${LD_LIBRARY_PATH}:$HADOOP_HDFS_HOME/lib/native:$JAVA_HOME/jre/lib/amd64/server')]
@@ -286,19 +268,19 @@ def install_main():
         env += [('AWS_ACCESS_KEY_ID', AWS_ID)]
     if AWS_KEY != 'undefined':
         env += [('AWS_SECRET_ACCESS_KEY', AWS_KEY)]
-    setup_env(env, path)
-
-# deploy script
-def deploy_main(is_master):
-    assert JAVA_HOME is not None
-    assert HADOOP_HOME is not None
-    assert NODE_VCPU is not None
-    assert NODE_VMEM is not None
-    disks = setup_dir()
-    setup_hadoop_site(MASTER,
-                      '%s/hadoop' % disks[0],
-                      ['%s/hadoop/dfs' % d for d in disks],
-                      NODE_VCPU, NODE_VMEM, is_master)
+    # setup environments
+    fo = open('.hadoop_env', 'w')
+    for k, v in env:
+        fo.write('export %s=%s\n' % (k,v))
+        ENVIRON[k] = v
+    fo.write('export PATH=$PATH:%s\n' % (':'.join(path)))
+    fo.write('export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/lib\n')
+    fo.close()
+    for l in open('.bashrc'):
+        if l.find('.hadoop_env') != -1:
+            return
+    run('echo source ~/.hadoop_env >> ~/.bashrc')
+    # allow ssh, if they already share the key.
     key_setup = """
         [ -f ~/.ssh/id_rsa ] ||
             (ssh-keygen -q -t rsa -N '' -f ~/.ssh/id_rsa &&
@@ -306,6 +288,46 @@ def deploy_main(is_master):
     """
     run(key_setup)
     regsshkey('%s/etc/hadoop/slaves' % HADOOP_HOME)
+
+# Make startup script for bulding
+def make_startup_script(is_master):
+    assert JAVA_HOME is not None
+    assert HADOOP_HOME is not None
+    assert NODE_VCPU is not None
+    assert NODE_VMEM is not None
+    disks = []
+    cmds = []
+    for d in DISK_LIST:
+        if os.path.exists('/dev/%s' % d):
+            cmds.append('sudo unmount /dev/%s' % d)
+            cmds.append('sudo mkfs -t ext4 /dev/%s' % d)
+            cmds.append('sudo mkdir -p /disk/%s' % d)
+            cmds.append('sudo mount /dev/%s /disk/%s' % (d, d))
+            disks.append('/disk/%s' % d)
+
+    for d in disks:
+        cmds.append('sudo mkdir -p %s/hadoop' %d)
+        cmds.append('sudo chown ubuntu:ubuntu %s/hadoop' % d)
+        cmds.append('sudo mkdir -p %s/tmp' %d)
+        cmds.append('sudo chown ubuntu:ubuntu %s/tmp' % d)
+        cmds.append('rm -rf %s/hadoop/dfs' % d)
+        cmds.append('mkdir %s/hadoop/dfs' % d)
+        cmds.append('mkdir %s/hadoop/dfs/name' % d)
+        cmds.append('mkdir %s/hadoop/dfs/data' % d)
+
+    # run command
+    if is_master:
+        cmds.append('$HADOOP_HOME/sbin/stop-all.sh')
+        cmds.append('$HADOOP_HOME/bin/hadoop namenode -format')
+        cmds.append('$HADOOP_HOME/sbin/start-all.sh')
+    else:
+        cmds.append('export HADOOP_LIBEXEC_DIR=$HADOOP_HOME/libexec &&'\
+                ' $HADOOP_HOME/sbin/yarn-daemon.sh --config $HADOOP_HOME/etc/hadoop start nodemanager')
+    with open('startup.sh', 'w') as fo:
+        fo.write('#!/bin/bash\n')
+        fo.write('\n'.join(cmds))
+    run('chmod +x startup.sh')
+    run('./startup.sh')
 
 def main():
     global MASTER
@@ -318,27 +340,15 @@ def main():
     else:
         is_master = socket.getfqdn() == MASTER
     tstart = time.time()
-    install_main()
+    install_main(is_master)
     tmid = time.time()
     logging.info('installation finishes in %g secs' % (tmid - tstart))
-    deploy_main(is_master)
-
+    make_startup_script(is_master)
     ENVIRON['HADOOP_HOME'] = HADOOP_HOME
     ENVIRON['JAVA_HOME'] = JAVA_HOME
-    # run command
-    if is_master:
-        run('$HADOOP_HOME/sbin/stop-all.sh')
-        run('$HADOOP_HOME/bin/hadoop namenode -format')
-        run('$HADOOP_HOME/sbin/start-all.sh')
-    else:
-        run('export HADOOP_LIBEXEC_DIR=$HADOOP_HOME/libexec &&'\
-            ' $HADOOP_HOME/sbin/yarn-daemon.sh --config $HADOOP_HOME/etc/hadoop start nodemanager')
-    if EXEC_CMD != '':
-        run(EXEC_CMD)
-
     tend = time.time()
     logging.info('boostrap finishes in %g secs' % (tend - tmid))
-    logging.info('all finishes in %g secs' % (tend - tstart))    
+    logging.info('all finishes in %g secs' % (tend - tstart))
 
 if __name__ == '__main__':
     pw_record = pwd.getpwnam(USER_NAME)
