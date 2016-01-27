@@ -353,7 +353,7 @@ def make_startup_script(is_master):
     cmds = []
     for d in DISK_LIST:
         if os.path.exists('/dev/%s' % d):
-            cmds.append('sudo unmount /dev/%s' % d)
+            cmds.append('sudo umount /dev/%s' % d)
             cmds.append('sudo mkfs -t ext4 /dev/%s' % d)
             cmds.append('sudo mkdir -p /disk/%s' % d)
             cmds.append('sudo mount /dev/%s /disk/%s' % (d, d))
