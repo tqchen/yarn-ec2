@@ -173,14 +173,14 @@ def install_hadoop(is_master):
         fo.write(pretty)
         fo.close()
 
-    def setup_hadoop_site(master, tmp_dir, hdfs_dir, vcpu, vmem):
+    def setup_hadoop_site(master, hadoop_dir, hdfs_dir, vcpu, vmem):
         """
         setup hadoop side given the parameters
 
         Parameters
         ----------
         master: the dns to master uri
-        tmp_dir: the directory to store temp files
+        hadoop_dir: the directory to store temp files
         hdfs_dir: the directories for hdfs
         vcpu: the number of cpus current machine have
         vmem: the memory(MB) current machine have
@@ -202,11 +202,12 @@ def install_hadoop(is_master):
         if is_master:
             vcpu = vcpu - 2
 
+        tmp_dir = hadoop_dir[0]
         core_site = {
             'fs.defaultFS': 'hdfs://%s:9000/' % master,
             'fs.s3n.awsAccessKeyId': AWS_ID,
             'fs.s3n.awsSecretAccessKey': AWS_KEY,
-            'hadoop.tmp.dir':  tmp_dir
+            'hadoop.tmp.dir': tmp_dir
         }
         update_site('%s/etc/hadoop/core-site.xml' % HADOOP_HOME, core_site)
         hdfs_site = {
@@ -230,7 +231,8 @@ def install_hadoop(is_master):
             'yarn.nodemanager.aux-services': 'mapreduce_shuffle',
             'yarn.nodemanager.aux-services.mapreduce.shuffle.class': 'org.apache.hadoop.mapred.ShuffleHandler',
             'yarn.nodemanager.remote-app-log-dir': os.path.join(tmp_dir, 'logs'),
-        'yarn.nodemanager.log-dirs': os.path.join(tmp_dir, 'userlogs')
+            'yarn.nodemanager.log-dirs': os.path.join(tmp_dir, 'userlogs'),
+            'yarn.nodemanager.local-dirs': ','.join(['%s/yarn/nm-local-dir' % d for d in hadoop_dir])
         }
         update_site('%s/etc/hadoop/yarn-site.xml' % HADOOP_HOME, yarn_site)
         mapred_site = {
@@ -277,7 +279,7 @@ def install_hadoop(is_master):
         env += [('HADOOP_CONF_DIR', '%s/etc/hadoop' % HADOOP_HOME)]
         disks = ['/disk/%s' % d for d in DISK_LIST if os.path.exists('/dev/%s' % d)]
         setup_hadoop_site(MASTER,
-                          '%s/hadoop' % disks[0],
+                          ['%s/hadoop' % d for d in disks],
                           ['%s/hadoop/dfs' % d for d in disks],
                           NODE_VCPU, NODE_VMEM)
         return env
