@@ -123,10 +123,10 @@ def get_user_data(fname, master_dns, instance_type, include_aws_key):
             ret.append('NODE_VMEM = %d\n' % vram[instance_type])
         elif l.startswith('NODE_VCPU ='):
             ret.append('NODE_VCPU = %d\n' % vcpu[instance_type])
-        elif l.startswith('AWS_KEY=') and include_aws_key:
-            ret.append('AWS_KEY = \'%s\'' % os.getenv('AWS_SECRET_ACCESS_KEY', 'undefined'))
-        elif l.startswith('AWS_ID=') and include_aws_key:
-            ret.append('AWS_ID = \'%s\'' % os.getenv('AWS_ACCESS_KEY_ID', 'undefined'))
+        elif l.startswith('AWS_KEY =') and include_aws_key:
+            ret.append('AWS_KEY = \'%s\'\n' % os.getenv('AWS_SECRET_ACCESS_KEY', 'undefined'))
+        elif l.startswith('AWS_ID =') and include_aws_key:
+            ret.append('AWS_ID = \'%s\'\n' % os.getenv('AWS_ACCESS_KEY_ID', 'undefined'))
         else:
             ret.append(l)
             special = False
@@ -220,7 +220,8 @@ def launch_master(conn, opts):
                                min_count=1,
                                max_count=1,
                                block_device_map=block_map,
-                               user_data=get_user_data('bootstrap.py', '', master_type))
+                               user_data=get_user_data('bootstrap.py', '',
+                                                       master_type, opts.include_aws_key))
         master_nodes = master_res.instances
         print "Launched master in %s, regid = %s" % (opts.zone, master_res.id)
 
