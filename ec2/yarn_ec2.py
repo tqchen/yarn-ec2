@@ -54,6 +54,9 @@ def parse_args():
         help="Resume installation on a previously launched cluster " +
              "(for debugging)")
     parser.add_option(
+        "--include-aws-key", default=False,
+        help="Whether include aws key information in bootstrap script, this can be dangerous as boostrap script is not encrypted")
+    parser.add_option(
         "--spot-price", metavar="PRICE", type="float",
         help="If specified, launch slaves as spot instances with the given " +
              "maximum price (in dollars)")
@@ -103,10 +106,13 @@ def get_resource_map(fname = 'data/instance.matrix.txt'):
 #
 # get user data of specific instance
 #
-def get_user_data(fname, master_dns, instance_type):
+def get_user_data(fname, master_dns, instance_type, include_aws_key):
     vcpu, vram, price = get_resource_map()
     data = open(fname).readlines()
     ret = []
+    if include_aws_key:
+        print "include AWS key option is switched on..."
+
     for l in data:
         special = True
         if l.startswith('MASTER ='):
@@ -117,6 +123,10 @@ def get_user_data(fname, master_dns, instance_type):
             ret.append('NODE_VMEM = %d\n' % vram[instance_type])
         elif l.startswith('NODE_VCPU ='):
             ret.append('NODE_VCPU = %d\n' % vcpu[instance_type])
+        elif l.startswith('AWS_KEY=') and include_aws_key:
+            ret.append('AWS_KEY = \'%s\'' % os.getenv('AWS_SECRET_ACCESS_KEY', 'undefined'))
+        elif l.startswith('AWS_ID=') and include_aws_key:
+            ret.append('AWS_ID = \'%s\'' % os.getenv('AWS_ACCESS_KEY_ID', 'undefined'))
         else:
             ret.append(l)
             special = False
@@ -271,7 +281,8 @@ def launch_slaves(conn, opts):
                           block_device_map=block_map,
                           user_data=get_user_data('bootstrap.py',
                                                   master.private_dns_name,
-                                                  opts.instance_type))
+                                                  opts.instance_type,
+                                                  opts.include_aws_key))
     slave_nodes = slave_res.instances
     print "Launched %d slaves in %s, regid = %s" % (len(slave_nodes),
                                                     zone, slave_res.id)
@@ -330,7 +341,8 @@ def launch_spot_slaves(conn, opts):
         block_device_map=block_map,
         user_data=get_user_data('bootstrap.py',
                                 master.private_dns_name,
-                                opts.instance_type))
+                                opts.instance_type,
+                                opts.include_aws_key))
     print 'Done... request is submitted'
 
 def stringify_command(parts):

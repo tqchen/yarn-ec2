@@ -45,7 +45,6 @@ master_r_packages = [
 hadoop_url = 'http://www.motorlogy.com/apache/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz'
 hadoop_dir = 'hadoop-2.6.0'
 
-
 # customized installation script.
 # See optional installation scripts for options.
 def custom_master_install():
@@ -53,6 +52,10 @@ def custom_master_install():
     install_r()
     pass
 
+# customized installation script for all nodes.
+def custom_all_nodes_install():
+    install_gcc()
+    pass
 
 ###---------------------------------------------------##
 #  Automatically set by script                        #
@@ -123,6 +126,11 @@ def install_packages(pkgs):
     sudo('apt-get -y update')
     sudo('apt-get -y install %s' % (' '.join(pkgs)))
 
+# install g++4.9, needed for regex match.
+def install_gcc():
+    sudo('add-apt-repository -y ppa:ubuntu-toolchain-r/test')
+    sudo('apt-get -y update')
+    sudo('apt-get -y install g++-4.9')
 
 def install_java():
     """
@@ -206,10 +214,12 @@ def install_hadoop(is_master):
         core_site = {
             'fs.defaultFS': 'hdfs://%s:9000/' % master,
             'fs.s3n.impl': 'org.apache.hadoop.fs.s3native.NativeS3FileSystem',
-            'fs.s3n.awsAccessKeyId': AWS_ID,
-            'fs.s3n.awsSecretAccessKey': AWS_KEY,
             'hadoop.tmp.dir': tmp_dir
         }
+        if AWS_ID != 'undefined':
+            core_site['fs.s3n.awsAccessKeyId'] = AWS_ID
+            core_site['fs.s3n.awsSecretAccessKey'] = AWS_KEY
+
         update_site('%s/etc/hadoop/core-site.xml' % HADOOP_HOME, core_site)
         hdfs_site = {
             'dfs.data.dir': ','.join(['%s/data' % d for d in hdfs_dir]),
@@ -351,6 +361,10 @@ def make_startup_script(is_master):
     assert NODE_VMEM is not None
     disks = []
     cmds = []
+
+    if is_master:
+        cmds.append('$HADOOP_HOME/sbin/stop-all.sh')
+
     for d in DISK_LIST:
         if os.path.exists('/dev/%s' % d):
             cmds.append('sudo umount /dev/%s' % d)
@@ -371,7 +385,6 @@ def make_startup_script(is_master):
 
     # run command
     if is_master:
-        cmds.append('$HADOOP_HOME/sbin/stop-all.sh')
         cmds.append('$HADOOP_HOME/bin/hadoop namenode -format')
         cmds.append('$HADOOP_HOME/sbin/start-all.sh')
     else:
@@ -405,6 +418,7 @@ def main():
     tend = time.time()
     if is_master:
         custom_master_install()
+    custom_all_nodes_install()
     logging.info('boostrap finishes in %g secs' % (tend - tmid))
     logging.info('all finishes in %g secs' % (tend - tstart))
 
