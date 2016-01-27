@@ -205,6 +205,7 @@ def install_hadoop(is_master):
         tmp_dir = hadoop_dir[0]
         core_site = {
             'fs.defaultFS': 'hdfs://%s:9000/' % master,
+            'fs.s3n.impl': 'org.apache.hadoop.fs.s3native.NativeS3FileSystem',
             'fs.s3n.awsAccessKeyId': AWS_ID,
             'fs.s3n.awsSecretAccessKey': AWS_KEY,
             'hadoop.tmp.dir': tmp_dir
@@ -221,7 +222,7 @@ def install_hadoop(is_master):
             'yarn.resourcemanager.scheduler.address': '%s:8030' % master,
             'yarn.resourcemanager.address': '%s:8032' % master,
             'yarn.scheduler.minimum-allocation-mb': 512,
-            'yarn.scheduler.maximum-allocation-mb': 64000,
+            'yarn.scheduler.maximum-allocation-mb': 640000,
             'yarn.scheduler.minimum-allocation-vcores': 1,
             'yarn.scheduler.maximum-allocation-vcores': 32,
             'yarn.nodemanager.resource.memory-mb': vcpu * ram_per_container,
@@ -236,6 +237,9 @@ def install_hadoop(is_master):
         }
         update_site('%s/etc/hadoop/yarn-site.xml' % HADOOP_HOME, yarn_site)
         mapred_site = {
+            'mapreduce.application.classpath' : ':'.join(['$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*',
+                                                          '$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*',
+                                                          '$HADOOP_MAPRED_HOME/share/hadoop/tools/lib/*']),
             'yarn.app.mapreduce.am.resource.mb': 2 * ram_per_container,
             'yarn.app.mapreduce.am.command-opts': '-Xmx%dm' % int(0.8 * 2 * ram_per_container),
             'mapreduce.framework.name': 'yarn',
