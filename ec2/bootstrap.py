@@ -71,7 +71,6 @@ HADOOP_HOME = os.getenv('HADOOP_HOME')
 DISK_LIST = [('xvd' + chr(ord('b') + i)) for i in range(10)]
 ENVIRON = os.environ.copy()
 
-
 ###--------------------------------##
 #  Optional installation scripts.  #
 ###--------------------------------##
@@ -336,8 +335,6 @@ def install_main(is_master):
     """
     run(key_setup)
     regsshkey('%s/etc/hadoop/slaves' % HADOOP_HOME)
-    for cmd in exec_cmds:
-        run(cmd)
     # end of instalation.
 
 # Make startup script for bulding
