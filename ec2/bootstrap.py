@@ -200,7 +200,7 @@ def install_hadoop(is_master):
         elif vmem < 24 * 1024 :
             reserved_ram = 2 * 1024
         elif vmem < 48 * 1024:
-            reserved_ram = 4 * 1024
+            reserved_ram = 2 * 1024
         elif vmem < 64 * 1024:
             reserved_ram = 6 * 1024
         else:
