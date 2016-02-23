@@ -19,7 +19,7 @@ class UsageError(Exception):
 def parse_args():
     parser = OptionParser(
         usage="mode-ec2 [options] <action> <cluster_name>"
-        + "\n\n<action> can be: launch, addslave, destroy, login, stop, start, get-master, stop-slave, forward-port",
+        + "\n\n<action> can be: launch, addslave, addspot, login, get-master, forward-port",
         add_help_option=False)
     parser.add_option(
         "-h", "--help", action="help",
@@ -52,7 +52,7 @@ def parse_args():
     parser.add_option(
         "--include-aws-key", default=False,
         help=("Whether include aws key information in bootstrap script," +
-              " this can be very dangerous as boostrap script is not encrypted")
+              " this can be very dangerous as boostrap script is not encrypted"))
     parser.add_option(
         "--spot-price", metavar="PRICE", type="float",
         help="If specified, launch slaves as spot instances with the given " +
@@ -396,6 +396,7 @@ def _check_output(*popenargs, **kwargs):
     return output
 
 def main():
+    logging.basicConfig()
     opts = parse_args()
     try:
         conn = ec2.connect_to_region(opts.region)
@@ -432,6 +433,6 @@ def main():
         print >> sys.stderr, "Invalid action: %s" % action
         sys.exit(1)
 
+
 if __name__ == "__main__":
-    logging.basicConfig()
     main()
