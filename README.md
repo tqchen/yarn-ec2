@@ -9,7 +9,7 @@ Features
 
 How to Use
 ----------
-To start a cluster, the script follows two steps: start master machine, add slaves.
+To start a cluster, the script follows two steps: (1) start master machine; (2) add slaves.
 This two step procedure allows you to add and remove slaves on the fly.
 
 - Start your master machine
