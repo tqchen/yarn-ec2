@@ -43,9 +43,19 @@ In case you stopped the master and restart it on the EC2. There is no need to do
 Instead, log into the master machine, and run ```startup.sh``` on the home folder.
 After the startup is finished, you can continue with the steps of adding slaves.
 
-
-
-
 Acknowledgement
 ---------------
 Part of yarn-ec2 is adopted from [spark-ec2](https://github.com/amplab/spark-ec2) script.
+
+Note on Implementation
+----------------------
+Most existing cluster launch script follows a start and deploy way.
+- First start all the nodes, copy the master's credentials to the slaves.
+- Deploy the slaves by using ssh or pssh command from master.
+
+These scripts requires master to be aware of the slaves and are hard to dynamically add or remove nodes.
+yarn-ec2 uses another way, where the master does not need to be aware of slaves beforehand.
+- First start the master and listen requests from slaves.
+- When a slave get started, it runs the bootstrap script, install the dependencies and report to master.
+  - The YARN will then dynamically add the slave to the cluster.
+- When a slave get removed, the master will detect the event with cluster health check, and remove it from the cluster.
