@@ -3,7 +3,7 @@ YARN EC2
 This is a script to help you quickly setup a dynamic YARN cluster on EC2.
 It adapts a cloud workflow to use S3 for distributed data storage and YARN for computing.
 
-*** Features ***
+***Features***
 - Dynamically add or remove slave nodes from the cluster.
 - Customized installation of packages.
 
