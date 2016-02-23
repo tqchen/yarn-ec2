@@ -50,12 +50,9 @@ def parse_args():
              "between zones applies)")
     parser.add_option("-a", "--ami", help="Amazon Machine Image ID to use")
     parser.add_option(
-        "--resume", action="store_true", default=False,
-        help="Resume installation on a previously launched cluster " +
-             "(for debugging)")
-    parser.add_option(
         "--include-aws-key", default=False,
-        help="Whether include aws key information in bootstrap script, this can be dangerous as boostrap script is not encrypted")
+        help=("Whether include aws key information in bootstrap script," +
+              " this can be very dangerous as boostrap script is not encrypted")
     parser.add_option(
         "--spot-price", metavar="PRICE", type="float",
         help="If specified, launch slaves as spot instances with the given " +

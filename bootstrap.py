@@ -48,8 +48,8 @@ hadoop_dir = 'hadoop-2.6.0'
 # customized installation script.
 # See optional installation scripts for options.
 def custom_master_install():
-    install_spark()
-    install_r()
+    #install_spark()
+    #install_r()
     pass
 
 # customized installation script for all nodes.
