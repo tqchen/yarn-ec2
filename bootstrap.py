@@ -42,8 +42,8 @@ master_r_packages = [
 ]
 
 # download link of hadoop.
-hadoop_url = 'http://apache.claz.org/hadoop/common/hadoop-2.6.0/hadoop-2.6.0.tar.gz'
-hadoop_dir = 'hadoop-2.6.0'
+hadoop_url = 'http://apache.claz.org/hadoop/common/hadoop-2.8.0/hadoop-2.8.0.tar.gz'
+hadoop_dir = 'hadoop-2.8.0'
 
 # customized installation script.
 # See optional installation scripts for options.
@@ -86,11 +86,11 @@ def install_r():
 
 
 def install_spark():
-    run('wget http://apache.osuosl.org/spark/spark-1.6.0/spark-1.6.0-bin-hadoop2.4.tgz')
-    run('tar xf spark-1.6.0-bin-hadoop2.4.tgz')
-    run('rm -rf spark-1.6.0-bin-hadoop2.4.tgz')
+    run('wget https://www.apache.org/dist/spark/spark-2.1.1/spark-2.1.1-bin-hadoop2.7.tgz')
+    run('tar xf spark-2.1.1-bin-hadoop2.7.tgz')
+    run('rm -rf spark-2.1.1-bin-hadoop2.7.tgz')
     with open('.bashrc', 'a') as fo:
-        fo.write('\nexport PATH=${PATH}:spark-1.6.0-bin-hadoop2.4\n')
+        fo.write('\nexport PATH=${PATH}:spark-2.1.1-bin-hadoop2.7\n')
 
 
 def install_xgboost():
@@ -137,15 +137,15 @@ def install_java():
     install java and setup environment variables
     Returns environment variables that needs to be exported
     """
-    if not os.path.exists('jdk1.8.0_40'):
+    if not os.path.exists('jdk1.8.0_131'):
         run('wget --no-check-certificate --no-cookies'\
                 ' --header \"Cookie: oraclelicense=accept-securebackup-cookie\"'\
-                ' http://download.oracle.com/otn-pub/java/jdk/8u40-b26/jdk-8u40-linux-x64.tar.gz')
-        run('tar xf jdk-8u40-linux-x64.tar.gz')
-        run('rm -f jdk-8u40-linux-x64.tar.gz')
+                ' http://download.oracle.com/otn-pub/java/jdk/8u131-b11/d54c1d3a095b4ff2b6607d096fa80163/jdk-8u131-linux-x64.tar.gz')
+        run('tar xf jdk-8u131-linux-x64.tar.gz')
+        run('rm -f jdk-8u131-linux-x64.tar.gz')
     global JAVA_HOME
     if JAVA_HOME is None:
-        JAVA_HOME = os.path.abspath('jdk1.8.0_40')
+        JAVA_HOME = os.path.abspath('jdk1.8.0_131')
     return [('JAVA_HOME', JAVA_HOME)]
 
 
@@ -276,13 +276,13 @@ def install_hadoop(is_master):
         fo.close()
 
     def run_install():
-        if not os.path.exists('hadoop-2.6.0'):
+        if not os.path.exists('hadoop-2.8.0'):
             run('wget %s' % hadoop_url)
-            run('tar xf hadoop-2.6.0.tar.gz')
-            run('rm -f hadoop-2.6.0.tar.gz')
+            run('tar xf hadoop-2.8.0.tar.gz')
+            run('rm -f hadoop-2.8.0.tar.gz')
             global HADOOP_HOME
         if HADOOP_HOME is None:
-            HADOOP_HOME = os.path.abspath('hadoop-2.6.0')
+            HADOOP_HOME = os.path.abspath('hadoop-2.8.0')
         env = [('HADOOP_HOME', HADOOP_HOME)]
         env += [('HADOOP_PREFIX', HADOOP_HOME)]
         env += [('HADOOP_MAPRED_HOME', HADOOP_HOME)]
